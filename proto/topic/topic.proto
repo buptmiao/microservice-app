@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+package topic;
+
+service Topic {
+    // Sums two integers.
+    rpc GetTopic (GetTopicRequest) returns (GetTopicResponse) {}
+}
+
+message GetTopicRequest {
+    int64 topic_id = 1;
+}
+
+message GetTopicResponse {
+    int64 topic_id = 1;
+    string subject = 2;
+    string content = 3;
+}
+

@@ -1,0 +1,27 @@
+
+syntax = "proto3";
+
+package feed;
+
+service Feed {
+    rpc GetFeeds (GetFeedsRequest) returns (GetFeedsResponse) {}
+    rpc CreateFeed (FeedRecord) returns (OkResponse) {}
+}
+
+message GetFeedsRequest {
+    int64 user_id = 1;
+    int64 size = 2;
+}
+
+message GetFeedsResponse {
+    repeated FeedRecord feeds = 1;
+}
+
+message FeedRecord {
+    int64 id = 1;
+    int64 user_id = 2;
+    string content = 3;
+}
+
+message OkResponse {}
+

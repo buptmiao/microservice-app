@@ -1,0 +1,21 @@
+
+syntax = "proto3";
+
+package profile;
+
+service Profile {
+    rpc GetProfile (GetProfileRequest) returns (GetProfileResponse) {}
+}
+
+message GetProfileRequest {
+    int64 user_id = 1;
+}
+
+message GetProfileResponse {
+    int64 user_id = 1;
+    string name = 2;
+    string company = 3;
+    string title = 4;
+    repeated bytes feeds = 5;
+}
+
