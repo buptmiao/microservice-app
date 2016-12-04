@@ -1,27 +1,26 @@
 package feed
 
 import (
-	"github.com/buptmiao/microservice-demo-dev/proto/feed"
+	"fmt"
+	"github.com/buptmiao/microservice-app/proto/feed"
 	"github.com/go-kit/kit/endpoint"
-	stdopentracing "github.com/opentracing/opentracing-go"
-	grpctransport "github.com/go-kit/kit/transport/grpc"
-	"github.com/go-kit/kit/tracing/opentracing"
-	"github.com/go-kit/kit/metrics/prometheus"
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
-	"fmt"
+	"github.com/go-kit/kit/metrics/prometheus"
+	"github.com/go-kit/kit/tracing/opentracing"
+	grpctransport "github.com/go-kit/kit/transport/grpc"
+	stdopentracing "github.com/opentracing/opentracing-go"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/net/context"
 	"time"
 )
 
 var (
 	duration metrics.Histogram = prometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
-		Namespace: "addsvc",
+		Namespace: "feed",
 		Name:      "request_duration_ns",
 		Help:      "Request duration in nanoseconds.",
 	}, []string{"method", "success"})
-
 )
 
 func EndpointInstrumentingMiddleware(duration metrics.Histogram) endpoint.Middleware {

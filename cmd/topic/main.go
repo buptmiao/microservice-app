@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/buptmiao/microservice-app/feed"
-	p_feed "github.com/buptmiao/microservice-app/proto/feed"
+	p_topic "github.com/buptmiao/microservice-app/proto/topic"
+	"github.com/buptmiao/microservice-app/topic"
 	"github.com/go-kit/kit/log"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
@@ -19,7 +19,7 @@ import (
 
 func main() {
 	var (
-		addr       = flag.String("addr", ":8082", "the microservices grpc address")
+		addr       = flag.String("addr", ":8084", "the microservices grpc address")
 		zipkinAddr = flag.String("zipkin", "", "the zipkin address")
 	)
 	flag.Parse()
@@ -42,7 +42,7 @@ func main() {
 			os.Exit(1)
 		}
 		tracer, err = zipkin.NewTracer(
-			zipkin.NewRecorder(collector, false, "localhost:80", "feed"),
+			zipkin.NewRecorder(collector, false, "localhost:80", "topic"),
 		)
 		if err != nil {
 			logger.Log("err", err)
@@ -50,7 +50,7 @@ func main() {
 		}
 	}
 
-	service := feed.NewFeedService()
+	service := topic.NewTopicService()
 
 	errchan := make(chan error)
 	ctx := context.Background()
@@ -67,9 +67,9 @@ func main() {
 		return
 	}
 
-	srv := feed.MakeGRPCServer(ctx, service, tracer, logger)
+	srv := topic.MakeGRPCServer(ctx, service, tracer, logger)
 	s := grpc.NewServer()
-	p_feed.RegisterFeedServer(s, srv)
+	p_topic.RegisterTopicServer(s, srv)
 
 	go func() {
 		//logger := log.NewContext(logger).With("transport", "gRPC")

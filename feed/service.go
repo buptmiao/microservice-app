@@ -1,16 +1,16 @@
 package feed
 
 import (
-	"golang.org/x/net/context"
-	"github.com/buptmiao/microservice-demo-dev/proto/feed"
-	"sync"
 	"errors"
+	"github.com/buptmiao/microservice-app/proto/feed"
+	"golang.org/x/net/context"
+	"sync"
 )
 
 // Storage
 var (
 	mem map[int64]map[int64]*feed.FeedRecord
-	mu sync.RWMutex
+	mu  sync.RWMutex
 )
 
 func init() {
@@ -26,7 +26,7 @@ func NewFeedService() feed.FeedServer {
 	return service{}
 }
 
-type service struct {}
+type service struct{}
 
 func (s service) GetFeeds(_ context.Context, req *feed.GetFeedsRequest) (*feed.GetFeedsResponse, error) {
 	userID := req.GetUserId()
@@ -48,10 +48,9 @@ func (s service) CreateFeed(_ context.Context, req *feed.FeedRecord) (*feed.OkRe
 	defer mu.Unlock()
 	userFeeds, ok := mem[req.UserId]
 	if !ok {
-		mem[req.UserId] = map[int64]*feed.FeedRecord{req.Id : req}
+		mem[req.UserId] = map[int64]*feed.FeedRecord{req.Id: req}
 		return &feed.OkResponse{}, nil
 	}
 	userFeeds[req.Id] = req
 	return &feed.OkResponse{}, nil
 }
-
