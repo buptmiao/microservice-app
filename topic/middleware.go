@@ -70,8 +70,8 @@ func MakeGRPCServer(ctx context.Context, s topic.TopicServer, tracer stdopentrac
 		gettopic: grpctransport.NewServer(
 			ctx,
 			MakeGetTopicEndpoint(s, tracer, logger),
-			nil,
-			nil,
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetTopic", logger)))...,
 		),
 	}

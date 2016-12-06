@@ -83,15 +83,15 @@ func MakeGRPCServer(ctx context.Context, s feed.FeedServer, tracer stdopentracin
 		getfeeds: grpctransport.NewServer(
 			ctx,
 			MakeGetFeedsEndpoint(s, tracer, logger),
-			nil,
-			nil,
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetFeeds", logger)))...,
 		),
 		createfeed: grpctransport.NewServer(
 			ctx,
 			MakeCreateFeedEndpoint(s, tracer, logger),
-			nil,
-			nil,
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "CreateFeed", logger)))...,
 		),
 	}

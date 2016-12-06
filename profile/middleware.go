@@ -70,8 +70,8 @@ func MakeGRPCServer(ctx context.Context, s profile.ProfileServer, tracer stdopen
 		getprofile: grpctransport.NewServer(
 			ctx,
 			MakeGetPrifileEndpoint(s, tracer, logger),
-			nil,
-			nil,
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
+			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetProfile", logger)))...,
 		),
 	}

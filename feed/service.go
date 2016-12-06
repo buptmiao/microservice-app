@@ -30,6 +30,7 @@ type service struct{}
 
 func (s service) GetFeeds(_ context.Context, req *feed.GetFeedsRequest) (*feed.GetFeedsResponse, error) {
 	userID := req.GetUserId()
+	size := req.GetSize()
 	feeds := []*feed.FeedRecord{}
 	mu.RLock()
 	defer mu.RUnlock()
@@ -37,7 +38,11 @@ func (s service) GetFeeds(_ context.Context, req *feed.GetFeedsRequest) (*feed.G
 		return nil, ErrUserNotFound
 	} else {
 		for _, f := range v {
+			if size <= 0 {
+				break
+			}
 			feeds = append(feeds, f)
+			size--
 		}
 	}
 	return &feed.GetFeedsResponse{Feeds: feeds}, nil
