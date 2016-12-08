@@ -83,7 +83,6 @@ func main() {
 	service := topic.NewTopicService()
 
 	errchan := make(chan error)
-	ctx := context.Background()
 
 	go func() {
 		c := make(chan os.Signal, 1)
