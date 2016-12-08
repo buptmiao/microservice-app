@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"io"
 	"time"
 
 	"github.com/buptmiao/microservice-app/proto/feed"
@@ -9,6 +10,9 @@ import (
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/ratelimit"
+	"github.com/go-kit/kit/sd"
+	"github.com/go-kit/kit/sd/etcd"
+	"github.com/go-kit/kit/sd/lb"
 	"github.com/go-kit/kit/tracing/opentracing"
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 	jujuratelimit "github.com/juju/ratelimit"
@@ -18,12 +22,29 @@ import (
 	"google.golang.org/grpc"
 )
 
+var feedCli feed.FeedClient
+
+func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) {
+	feedCli = NewFeedClient(conn, tracer, logger)
+}
+
+func InitWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, logger log.Logger) {
+	feedCli = NewFeedClientWithSD(sdClient, tracer, logger)
+}
+
+func GetClient() feed.FeedClient {
+	if feedCli == nil {
+		panic("feed client is not be initialized!")
+	}
+	return feedCli
+}
+
 type FeedClient struct {
 	GetFeedsEndpoint   endpoint.Endpoint
 	CreateFeedEndpoint endpoint.Endpoint
 }
 
-func (f FeedClient) GetFeeds(ctx context.Context, in *feed.GetFeedsRequest, opts ...grpc.CallOption) (*feed.GetFeedsResponse, error) {
+func (f *FeedClient) GetFeeds(ctx context.Context, in *feed.GetFeedsRequest, opts ...grpc.CallOption) (*feed.GetFeedsResponse, error) {
 	resp, err := f.GetFeedsEndpoint(ctx, in)
 	if err != nil {
 		return nil, err
@@ -31,7 +52,7 @@ func (f FeedClient) GetFeeds(ctx context.Context, in *feed.GetFeedsRequest, opts
 	return resp.(*feed.GetFeedsResponse), nil
 }
 
-func (f FeedClient) CreateFeed(ctx context.Context, in *feed.FeedRecord, opts ...grpc.CallOption) (*feed.OkResponse, error) {
+func (f *FeedClient) CreateFeed(ctx context.Context, in *feed.FeedRecord, opts ...grpc.CallOption) (*feed.OkResponse, error) {
 	resp, err := f.CreateFeedEndpoint(ctx, in)
 	if err != nil {
 		return nil, err
@@ -81,8 +102,48 @@ func NewFeedClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger l
 		}))(createFeedEndpoint)
 	}
 
-	return FeedClient{
+	return &FeedClient{
 		GetFeedsEndpoint:   getFeedsEndpoint,
 		CreateFeedEndpoint: createFeedEndpoint,
+	}
+}
+
+func MakeGetFeedsEndpoint(f feed.FeedClient) endpoint.Endpoint {
+	return f.(*FeedClient).GetFeedsEndpoint
+}
+
+func MakeCreateFeedEndpoint(f feed.FeedClient) endpoint.Endpoint {
+	return f.(*FeedClient).CreateFeedEndpoint
+}
+
+func NewFeedClientWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, logger log.Logger) feed.FeedClient {
+	res := &FeedClient{}
+
+	factory := FeedFactory(MakeGetFeedsEndpoint, tracer, logger)
+	subscriber, _ := etcd.NewSubscriber(sdClient, "/services/feed", factory, logger)
+	balancer := lb.NewRoundRobin(subscriber)
+	retry := lb.Retry(3, time.Second, balancer)
+	res.GetFeedsEndpoint = retry
+
+	factory = FeedFactory(MakeCreateFeedEndpoint, tracer, logger)
+	subscriber, _ = etcd.NewSubscriber(sdClient, "/services/feed", factory, logger)
+	balancer = lb.NewRoundRobin(subscriber)
+	retry = lb.Retry(3, time.Second, balancer)
+	res.CreateFeedEndpoint = retry
+
+	return res
+}
+
+// Todo: use connect pool, and reference counting to one connection.
+func FeedFactory(makeEndpoint func(f feed.FeedClient) endpoint.Endpoint, tracer stdopentracing.Tracer, logger log.Logger) sd.Factory {
+	return func(instance string) (endpoint.Endpoint, io.Closer, error) {
+		conn, err := grpc.Dial(instance, grpc.WithInsecure())
+		if err != nil {
+			return nil, nil, err
+		}
+		service := NewFeedClient(conn, tracer, logger)
+		endpoint := makeEndpoint(service)
+
+		return endpoint, conn, nil
 	}
 }
