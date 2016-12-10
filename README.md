@@ -1,18 +1,19 @@
 ## Microservice-app
 
-### 一, 简介
+### 一. 简介
 
-该项目是基于go语言搭建的微服务架构应用. 包含如下组件: 
-1. 服务注册中心 [etcd](https://github.com/coreos/etcd)
-2. Api 网关
-3. Feed 服务
-4. Profile 服务
-5. Topic 服务
-6. 监控组件: prometheus + grafana
+该项目是基于go语言搭建的微服务架构应用. 包含如下组件:   
+
+1. 服务注册中心 [etcd](https://github.com/coreos/etcd)  
+2. Api 网关  
+3. Feed 服务  
+4. Profile 服务  
+5. Topic 服务  
+6. 监控组件: prometheus + grafana  
 
 其中Feed, Profile, Topic 启动时会向etcd注册服务, Apigateway 通过调用这三个服务的客户端 Watch 到相应服务的注册Key, 同时得到服务的地址. 当服务实例个数动态伸缩时, Apigateway 也会实时响应变化.
 
-### 二, 项目源码
+### 二. 项目源码
 
 目录 | 介绍 
 --------|-----------------
@@ -27,11 +28,11 @@ proto       |  服务间IPC方式采用grpc.
 topic       |  topic服务.
 vagrant     |  虚拟化分布式环境, 采用传统方式部署应用.
     
-### 三, 部署应用
+### 三. 部署应用
 
 目前使用了两种应用部署方式:传统部署方式和容器化部署方式
 
-#### 1, 传统部署
+#### 1. 传统部署
  如果你熟悉[vagrant](https://www.vagrantup.com/), vagrant目录下有具体部署细节. 参考[Vagrantfile](https://github.com/buptmiao/microservice-app/blob/master/vagrant/Vagrantfile) 和 [provision.sh](https://github.com/buptmiao/microservice-app/blob/master/vagrant/provision.sh)
  总的来讲,项目使用vagrant虚拟化了5个节点, 节点0部署etcd, 节点1-4分别部署service-feed, service-profile, service-topic, apigateway.
 ```ruby
@@ -96,7 +97,7 @@ $ exit
 ```
 这样, 对于feed相关的请求,apigateway会把每一个请求通过round robin的方式均衡的打到两个feed实例上,实现进程内负载均衡. 同样需要注意: 原则上说, 微服务都应该是无状态的. 然而为了简单,该项目中的微服务实例都是采用内存存储. 所以在多实例环境下, 如果你发布了一条feed, 却没有拉取到, 那么多试几次即可.
 
-#### 2, 容器化部署
+#### 2. 容器化部署
 
 如果你对docker熟悉的话, docker目录下提供了构建镜像的脚本 [build.sh](https://github.com/buptmiao/microservice-app/blob/master/docker/build.sh).
 ```
@@ -115,13 +116,13 @@ $ curl -XPUT "http://localhost:8080/api/feed/create_feed" -d '{"id": 101, "user_
 $ curl -XGET "http://localhost:8080/api/feed/get_feeds?user_id=123&&size=2"                                           // 拉取feed列表
 ```
 
-### 四, 应用监控
+### 四. 应用监控
 
 应用监控采用[prometheus](https://github.com/prometheus/prometheus) + [grafana](https://github.com/grafana/grafana) + [cadvisor](https://github.com/google/cadvisor) + [alertmanager](https://github.com/prometheus/alertmanager).
 
 
 
-### 五, Todo
+### 五. Todo
 
 * 使用zipkin跟踪
 * 使用kubenetes部署整个应用
