@@ -25,6 +25,7 @@ import (
 func main() {
 	var (
 		addr       = flag.String("addr", ":8083", "the microservices grpc address")
+		debugAddr  = flag.String("debug.addr", ":6063", "the debug and metrics address")
 		etcdAddr   = flag.String("etcd.addr", "", "etcd registry address")
 		zipkinAddr = flag.String("zipkin", "", "the zipkin address")
 	)
@@ -122,8 +123,8 @@ func main() {
 		m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 		m.Handle("/metrics", stdprometheus.Handler())
 
-		logger.Log("addr", ":6060")
-		errchan <- http.ListenAndServe(":6060", m)
+		logger.Log("addr", *debugAddr)
+		errchan <- http.ListenAndServe(*debugAddr, m)
 	}()
 
 	logger.Log("graceful shutdown...", <-errchan)
