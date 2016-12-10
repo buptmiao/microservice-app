@@ -8,6 +8,10 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/sd/etcd"
 	stdopentracing "github.com/opentracing/opentracing-go"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"net/http"
+	"net/http/pprof"
+
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -86,7 +90,7 @@ func main() {
 
 	go func() {
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		errchan <- fmt.Errorf("%s", <-c)
 	}()
 
@@ -105,6 +109,23 @@ func main() {
 		logger.Log("addr", *addr)
 		errchan <- s.Serve(ln)
 	}()
+
+	// Debug listener.
+	go func() {
+		logger := log.NewContext(logger).With("transport", "debug")
+
+		m := http.NewServeMux()
+		m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		m.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		m.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		m.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+		m.Handle("/metrics", stdprometheus.Handler())
+
+		logger.Log("addr", ":6060")
+		errchan <- http.ListenAndServe(":6060", m)
+	}()
+
 	logger.Log("graceful shutdown...", <-errchan)
 	s.GracefulStop()
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/go-kit/kit/sd/etcd"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 )
 
@@ -66,6 +68,22 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	// Debug listener.
+	go func() {
+		logger := log.NewContext(logger).With("transport", "debug")
+
+		m := http.NewServeMux()
+		m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		m.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		m.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		m.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+		m.Handle("/metrics", stdprometheus.Handler())
+
+		logger.Log("addr", ":6060")
+		http.ListenAndServe(":6060", m)
+	}()
 
 	feed.InitWithSD(sdClient, tracer, logger)
 	profile.InitWithSD(sdClient, tracer, logger)

@@ -1,2 +1,5 @@
 
 vagrant/.vagrant/*
+monitor/alertmanager/plugins
+monitor/alertmanager/sessions
+monitor/*/grafana.db
