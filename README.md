@@ -13,6 +13,10 @@
 
 其中Feed, Profile, Topic 启动时会向etcd注册服务, Apigateway 通过调用这三个服务的客户端 Watch 到相应服务的注册Key, 同时得到服务的地址. 当服务实例个数动态伸缩时, Apigateway 也会实时响应变化.
 
+结构如下:  
+
+![block](https://github.com/buptmiao/microservice-app/blob/master/pictures/block.png) 
+
 ### 二. 项目源码
 
 目录 | 介绍 
@@ -120,7 +124,39 @@ $ curl -XGET "http://localhost:8080/api/feed/get_feeds?user_id=123&&size=2"     
 
 应用监控采用[prometheus](https://github.com/prometheus/prometheus) + [grafana](https://github.com/grafana/grafana) + [cadvisor](https://github.com/google/cadvisor) + [alertmanager](https://github.com/prometheus/alertmanager).
 
+#### 启动监视器
 
+启动监视器之前请先阅读[README](https://github.com/buptmiao/microservice-app/blob/master/monitor/README.md). 
+
+如果是使用方式1部署的应用, 在monitor目录下, 可以通过如下配置target, 来监视app
+
+```
+- targets: ['localhost:9090','cadvisor:8080', '192.168.50.11:6062', '192.168.50.12:6063', '192.168.50.13:6064', '192.168.50.14:6060']
+```
+
+然后在monitor目录下
+```
+$ docker-compose up
+```
+
+这样监视器启动成功.
+
+如果采用方式2部署的应用, docker-compose文件已经配置好. 直接在monitor目录下:
+```
+$ docker-compose -f docker-compose.yml.2 up -d
+```
+
+两种方式启动成功后, 都可以通过访问: http://localhost:9090/graph 来查看metrics.
+
+#### 可视化
+
+可视化采用grafana, 它与prometheus结合的很好, 采用该方案可以很好的监控docker容器的状态
+
+打开浏览器 http://localhost:3000, 进入grafana, 添加数据源, Type选择Prometheus, Access选择direct模式, 填写prometheus的url: http://localhost:9090, 勾上默认. Save & test. 退出.
+
+添加dashboard, 导入monitor/grafana/docker_dashboard.json 即可看到下图:
+
+![docker_dashboard](https://github.com/buptmiao/microservice-app/blob/master/pictures/docker_dashboard.png) 
 
 ### 五. Todo
 
