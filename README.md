@@ -10,6 +10,7 @@
 4. Profile 服务  
 5. Topic 服务  
 6. 监控组件: prometheus + grafana  
+7. 跟踪组件: zipkin + elasticsearch
 
 其中Feed, Profile, Topic 启动时会向etcd注册服务, Apigateway 通过调用这三个服务的客户端 Watch 到相应服务的注册Key, 同时得到服务的地址. 当服务实例个数动态伸缩时, Apigateway 也会实时响应变化.
 
@@ -180,7 +181,7 @@ $ curl -XGET "http://localhost:8080/api/feed/get_feeds?user_id=123&&size=2"     
 ```
 这时候跟踪系统已经有了3条数据.
 
-浏览器打开[http://localhost:9411](http://localhost:9411), 服务名选择http, endpoint选择getFeeds, 并选择合适的时间范围, 然后点击Find traces, 便可找到这3条traces.
+浏览器打开[http://localhost:9411](http://localhost:9411), 服务名选择http, 并选择合适的时间范围, 然后点击Find traces, 便可找到这3条traces.
 随便点一条进去可以看到如下图所示跟踪轨迹(由于该App功能简单,调用深度目前只有两层):
  
 ![tracing](https://github.com/buptmiao/microservice-app/blob/master/pictures/tracing.png) 
