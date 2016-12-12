@@ -77,6 +77,7 @@ services:
     image: buptmiao/feed:v1.0.1
     depends_on:
       - etcd
+      - zipkin
     command:
       - '-addr=feed:8082'
       - '-etcd.addr=http://etcd:2379'
@@ -87,6 +88,7 @@ services:
     image: buptmiao/profile:v1.0.1
     depends_on:
       - etcd
+      - zipkin
     command:
       - '-addr=profile:8083'
       - '-etcd.addr=http://etcd:2379'
@@ -97,6 +99,7 @@ services:
     image: buptmiao/topic:v1.0.1
     depends_on:
       - etcd
+      - zipkin
     command:
       - '-addr=topic:8084'
       - '-etcd.addr=http://etcd:2379'
@@ -118,6 +121,7 @@ services:
       - 6060:6060
     depends_on:
       - etcd
+      - zipkin
     networks:
       - back-tier
       - front-tier
