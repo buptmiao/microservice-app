@@ -27,7 +27,7 @@ func main() {
 		addr       = flag.String("addr", ":8083", "the microservices grpc address")
 		debugAddr  = flag.String("debug.addr", ":6063", "the debug and metrics address")
 		etcdAddr   = flag.String("etcd.addr", "", "etcd registry address")
-		zipkinAddr = flag.String("zipkin", "", "the zipkin address")
+		zipkinAddr = flag.String("zipkin.addr", "", "the zipkin address")
 	)
 	flag.Parse()
 	key := "/services/profile/" + *addr
@@ -68,9 +68,9 @@ func main() {
 	if *zipkinAddr != "" {
 		logger := log.NewContext(logger).With("tracer", "Zipkin")
 		logger.Log("addr", *zipkinAddr)
-		collector, err := zipkin.NewKafkaCollector(
-			strings.Split(*zipkinAddr, ","),
-			zipkin.KafkaLogger(logger),
+		collector, err := zipkin.NewHTTPCollector(
+			*zipkinAddr,
+			zipkin.HTTPLogger(logger),
 		)
 		if err != nil {
 			logger.Log("err", err)

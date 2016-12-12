@@ -30,6 +30,7 @@ monitor     |  监控组件.
 profile     |  profile服务.
 proto       |  服务间IPC方式采用grpc.
 topic       |  topic服务.
+tracer      |  分布式跟踪.
 vagrant     |  虚拟化分布式环境, 采用传统方式部署应用.
     
 ### 三. 部署应用
@@ -152,13 +153,37 @@ $ docker-compose -f docker-compose.yml.2 up -d
 
 可视化采用grafana, 它与prometheus结合的很好, 采用该方案可以很好的监控docker容器的状态
 
-打开浏览器 http://localhost:3000, 进入grafana, 添加数据源, Type选择Prometheus, Access选择direct模式, 填写prometheus的url: http://localhost:9090, 勾上默认. Save & test. 退出.
+打开浏览器 [http://localhost:3000](http://localhost:3000), 进入grafana, 添加数据源, Type选择Prometheus, Access选择direct模式, 填写prometheus的url: http://localhost:9090, 勾上默认. Save & test. 退出.
 
 添加dashboard, 导入monitor/grafana/docker_dashboard.json 即可看到下图:
 
 ![docker_dashboard](https://github.com/buptmiao/microservice-app/blob/master/pictures/docker_dashboard.png) 
 
-### 五. Todo
+### 五. 跟踪
 
-* 使用zipkin跟踪
+分布式跟踪系统采用 [zipkin](https://github.com/openzipkin/zipkin) + elasticsearch后端, zipkin负责UI和span收集, es负责海量数据存储和索引. 在App中已经集成了zipkin的客户端代码, 只需要在程序执行时设置-zipkin.addr参数即可, 例如:
+
+```
+go run cmd/feed/main.go -etcd.addr=http://localhost:2379 -zipkin.addr=http://localhost:9411/api/v1/spans
+```
+
+tracer目录下提供了一个docker-compose.yml文件, 它在docker/docker-compose.yml的基础上集成了zipkin和elasticsearch. 在该目录下:
+```
+$ docker-compose up -d
+```
+
+启动成功后可以通过curl访问:
+```
+$ curl -XPUT "http://localhost:8080/api/feed/create_feed" -d '{"id": 100, "user_id": 123, "content": "hello world"}'  // 发布feed1
+$ curl -XPUT "http://localhost:8080/api/feed/create_feed" -d '{"id": 101, "user_id": 123, "content": "goodbye!"}'     // 发布feed2
+$ curl -XGET "http://localhost:8080/api/feed/get_feeds?user_id=123&&size=2"                                           // 拉取feed列表
+```
+这时候跟踪系统已经有了3条数据.
+
+浏览器打开[http://localhost:9411](http://localhost:9411), 服务名选择http, endpoint选择getFeeds, 并选择合适的时间范围, 然后点击Find traces, 便可找到这3条traces.
+随便点一条进去可以看到如下图所示跟踪轨迹(由于该App功能简单,调用深度目前只有两层):
+ 
+![tracing](https://github.com/buptmiao/microservice-app/blob/master/pictures/tracing.png) 
+
+### 六. Todo
 * 使用kubenetes部署整个应用

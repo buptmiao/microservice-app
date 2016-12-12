@@ -52,9 +52,9 @@ func main() {
 	if *zipkinAddr != "" {
 		logger := log.NewContext(logger).With("tracer", "Zipkin")
 		logger.Log("addr", *zipkinAddr)
-		collector, err := zipkin.NewKafkaCollector(
-			strings.Split(*zipkinAddr, ","),
-			zipkin.KafkaLogger(logger),
+		collector, err := zipkin.NewHTTPCollector(
+			*zipkinAddr,
+			zipkin.HTTPLogger(logger),
 		)
 		if err != nil {
 			logger.Log("err", err)

@@ -1,0 +1,123 @@
+version: '2'
+
+networks:
+  front-tier:
+    driver: bridge
+  back-tier:
+    driver: bridge
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd
+    command: >-
+      /usr/local/bin/etcd
+      -name etcd0
+      -advertise-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
+      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
+      -initial-advertise-peer-urls http://0.0.0.0:2380
+      -initial-cluster-token etcd-cluster-1
+      -initial-cluster etcd0=http://0.0.0.0:2380
+      -initial-cluster-state new
+    ports:
+      - 2379:2379
+      - 2380:2380
+      - 4001:4001
+    networks:
+      - back-tier
+
+  zipkin-backend:
+    image: openzipkin/zipkin-elasticsearch:1.17.0
+    container_name: elasticsearch
+    ports:
+      # http
+      - 9200:9200
+    networks:
+      - back-tier
+
+    # The zipkin process services the UI, and also exposes a POST endpoint that
+    # instrumentation can send trace data to. Scribe is enabled by default.
+  zipkin:
+    image: openzipkin/zipkin:1.17.0
+    container_name: zipkin
+    # Environment settings are defined here https://github.com/openzipkin/zipkin/tree/1.17.0/zipkin-server#environment-variables
+    environment:
+      - STORAGE_TYPE=elasticsearch
+      # Point the zipkin at the storage backend
+      - ES_HOSTS=http://elasticsearch:9200
+      # Point the zipkin at the storage backend
+      # - MYSQL_HOST=mysql
+      # Uncomment to disable scribe
+      # - SCRIBE_ENABLED=false
+      # Uncomment to enable self-tracing
+      # - SELF_TRACING_ENABLED=true
+      # Uncomment to enable debug logging
+      # - JAVA_OPTS=-Dlogging.level.zipkin=DEBUG
+    ports:
+      # Listen port for the Scribe transport
+      - 9410:9410
+      # Port used for the Zipkin UI and HTTP Api
+      - 9411:9411
+    depends_on:
+      - zipkin-backend
+    networks:
+      - back-tier
+  dependencies:
+      image: openzipkin/zipkin-dependencies
+      container_name: dependencies
+      entrypoint: crond -f
+      environment:
+        - STORAGE_TYPE=elasticsearch
+        - ES_HOSTS=elasticsearch
+      depends_on:
+        - zipkin-backend
+      networks:
+        - back-tier
+
+  feed:
+    image: buptmiao/feed:v1.0.1
+    depends_on:
+      - etcd
+    command:
+      - '-addr=feed:8082'
+      - '-etcd.addr=http://etcd:2379'
+      - '-zipkin.addr=http://zipkin:9411/api/v1/spans'
+    networks:
+      - back-tier
+  profile:
+    image: buptmiao/profile:v1.0.1
+    depends_on:
+      - etcd
+    command:
+      - '-addr=profile:8083'
+      - '-etcd.addr=http://etcd:2379'
+      - '-zipkin.addr=http://zipkin:9411/api/v1/spans'
+    networks:
+      - back-tier
+  topic:
+    image: buptmiao/topic:v1.0.1
+    depends_on:
+      - etcd
+    command:
+      - '-addr=topic:8084'
+      - '-etcd.addr=http://etcd:2379'
+      - '-zipkin.addr=http://zipkin:9411/api/v1/spans'
+    networks:
+      - back-tier
+
+  apigateway:
+    image: buptmiao/apigateway:v1.0.1
+
+    command:
+      - '-http.addr=0.0.0.0:8080'
+      - '-etcd.addr=http://etcd:2379'
+      - '-zipkin.addr=http://zipkin:9411/api/v1/spans'
+    expose:
+      - 8080
+    ports:
+      - 8080:8080
+      - 6060:6060
+    depends_on:
+      - etcd
+    networks:
+      - back-tier
+      - front-tier
