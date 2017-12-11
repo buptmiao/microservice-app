@@ -15,13 +15,12 @@ import (
 
 func runFeedServer(addr string) *grpc.Server {
 	service := feed.NewFeedService()
-	ctx := context.Background()
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
-	srv := feed.MakeGRPCServer(ctx, service, opentracing.NoopTracer{}, log.NewNopLogger())
+	srv := feed.MakeGRPCServer(service, opentracing.NoopTracer{}, log.NewNopLogger())
 	s := grpc.NewServer()
 	p_feed.RegisterFeedServer(s, srv)
 

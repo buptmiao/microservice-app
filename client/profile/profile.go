@@ -15,14 +15,15 @@ import (
 	"github.com/go-kit/kit/sd/lb"
 	"github.com/go-kit/kit/tracing/opentracing"
 	grpctransport "github.com/go-kit/kit/transport/grpc"
-	jujuratelimit "github.com/juju/ratelimit"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	"github.com/sony/gobreaker"
 	"golang.org/x/net/context"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 )
 
 var profileCli profile.ProfileClient
+var profileInstancer *etcd.Instancer
 
 func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) {
 	profileCli = NewProfileClient(conn, tracer, logger)
@@ -30,6 +31,7 @@ func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger
 
 func InitWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, logger log.Logger) {
 	profileCli = NewProfileClientWithSD(sdClient, tracer, logger)
+	profileInstancer, _ = etcd.NewInstancer(sdClient, "prifileSD", logger)
 }
 
 func GetClient() profile.ProfileClient {
@@ -52,7 +54,7 @@ func (p *ProfileClient) GetProfile(ctx context.Context, in *profile.GetProfileRe
 }
 
 func NewProfileClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) profile.ProfileClient {
-	limiter := ratelimit.NewTokenBucketLimiter(jujuratelimit.NewBucketWithRate(100, 100))
+	limiter := ratelimit.NewDelayingLimiter(rate.NewLimiter(rate.Every(time.Second), 1000))
 
 	var getProfileEndpoint endpoint.Endpoint
 	{
@@ -63,7 +65,7 @@ func NewProfileClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logge
 			util.DummyEncode,
 			util.DummyDecode,
 			profile.GetProfileResponse{},
-			grpctransport.ClientBefore(opentracing.ToGRPCRequest(tracer, logger)),
+			grpctransport.ClientBefore(opentracing.ContextToGRPC(tracer, logger)),
 		).Endpoint()
 		getProfileEndpoint = opentracing.TraceClient(tracer, "GetProfile")(getProfileEndpoint)
 		getProfileEndpoint = limiter(getProfileEndpoint)
@@ -86,8 +88,8 @@ func NewProfileClientWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, 
 	res := &ProfileClient{}
 
 	factory := ProfileFactory(MakeGetProfileEndpoint, tracer, logger)
-	subscriber, _ := etcd.NewSubscriber(sdClient, "/services/profile", factory, logger)
-	balancer := lb.NewRoundRobin(subscriber)
+	endpointer := sd.NewEndpointer(profileInstancer, factory, logger)
+	balancer := lb.NewRoundRobin(endpointer)
 	retry := lb.Retry(3, time.Second, balancer)
 	res.GetProfileEndpoint = retry
 

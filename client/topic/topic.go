@@ -15,14 +15,15 @@ import (
 	"github.com/go-kit/kit/sd/lb"
 	"github.com/go-kit/kit/tracing/opentracing"
 	grpctransport "github.com/go-kit/kit/transport/grpc"
-	jujuratelimit "github.com/juju/ratelimit"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	"github.com/sony/gobreaker"
 	"golang.org/x/net/context"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 )
 
 var topicCli topic.TopicClient
+var topicInstancer *etcd.Instancer
 
 func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) {
 	topicCli = NewTopicClient(conn, tracer, logger)
@@ -30,6 +31,8 @@ func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger
 
 func InitWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, logger log.Logger) {
 	topicCli = NewTopicClientWithSD(sdClient, tracer, logger)
+	topicInstancer, _ = etcd.NewInstancer(sdClient, "topicSD", logger)
+
 }
 
 func GetClient() topic.TopicClient {
@@ -52,7 +55,7 @@ func (p *TopicClient) GetTopic(ctx context.Context, in *topic.GetTopicRequest, o
 }
 
 func NewTopicClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) topic.TopicClient {
-	limiter := ratelimit.NewTokenBucketLimiter(jujuratelimit.NewBucketWithRate(100, 100))
+	limiter := ratelimit.NewDelayingLimiter(rate.NewLimiter(rate.Every(time.Second), 1000))
 
 	var getTopicEndpoint endpoint.Endpoint
 	{
@@ -63,7 +66,7 @@ func NewTopicClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger 
 			util.DummyEncode,
 			util.DummyDecode,
 			topic.GetTopicResponse{},
-			grpctransport.ClientBefore(opentracing.ToGRPCRequest(tracer, logger)),
+			grpctransport.ClientBefore(opentracing.ContextToGRPC(tracer, logger)),
 		).Endpoint()
 		getTopicEndpoint = opentracing.TraceClient(tracer, "GetTopic")(getTopicEndpoint)
 		getTopicEndpoint = limiter(getTopicEndpoint)
@@ -86,8 +89,8 @@ func NewTopicClientWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, lo
 	res := &TopicClient{}
 
 	factory := TopicFactory(MakeGetTopicEndpoint, tracer, logger)
-	subscriber, _ := etcd.NewSubscriber(sdClient, "/services/topic", factory, logger)
-	balancer := lb.NewRoundRobin(subscriber)
+	endpointer := sd.NewEndpointer(topicInstancer, factory, logger)
+	balancer := lb.NewRoundRobin(endpointer)
 	retry := lb.Retry(3, time.Second, balancer)
 	res.GetTopicEndpoint = retry
 

@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"context"
 	"fmt"
 	"github.com/buptmiao/microservice-app/proto/feed"
 	"github.com/go-kit/kit/endpoint"
@@ -11,7 +12,7 @@ import (
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
+	oldcontext "golang.org/x/net/context"
 	"time"
 )
 
@@ -53,7 +54,7 @@ func MakeGetFeedsEndpoint(s feed.FeedServer, tracer stdopentracing.Tracer, logge
 		return s.GetFeeds(ctx, req)
 	}
 	epduration := duration.With("method", "GetFeeds")
-	eplog := log.NewContext(logger).With("method", "GetFeeds")
+	eplog := log.With(logger, "method", "GetFeeds")
 	ep = opentracing.TraceServer(tracer, "GetFeeds")(ep)
 	ep = EndpointInstrumentingMiddleware(epduration)(ep)
 	ep = EndpointLoggingMiddleware(eplog)(ep)
@@ -66,7 +67,7 @@ func MakeCreateFeedEndpoint(s feed.FeedServer, tracer stdopentracing.Tracer, log
 		return s.CreateFeed(ctx, req)
 	}
 	epduration := duration.With("method", "CreateFeed")
-	eplog := log.NewContext(logger).With("method", "CreateFeed")
+	eplog := log.With(logger, "method", "CreateFeed")
 	ep = opentracing.TraceServer(tracer, "CreateFeed")(ep)
 	ep = EndpointInstrumentingMiddleware(epduration)(ep)
 	ep = EndpointLoggingMiddleware(eplog)(ep)
@@ -74,25 +75,23 @@ func MakeCreateFeedEndpoint(s feed.FeedServer, tracer stdopentracing.Tracer, log
 }
 
 // MakeGRPCServer makes a set of endpoints available as a gRPC AddServer.
-func MakeGRPCServer(ctx context.Context, s feed.FeedServer, tracer stdopentracing.Tracer, logger log.Logger) feed.FeedServer {
+func MakeGRPCServer(s feed.FeedServer, tracer stdopentracing.Tracer, logger log.Logger) feed.FeedServer {
 	options := []grpctransport.ServerOption{
 		grpctransport.ServerErrorLogger(logger),
 	}
 
 	return &grpcServer{
 		getfeeds: grpctransport.NewServer(
-			ctx,
 			MakeGetFeedsEndpoint(s, tracer, logger),
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
-			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetFeeds", logger)))...,
+			append(options, grpctransport.ServerBefore(opentracing.GRPCToContext(tracer, "GetFeeds", logger)))...,
 		),
 		createfeed: grpctransport.NewServer(
-			ctx,
 			MakeCreateFeedEndpoint(s, tracer, logger),
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
-			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "CreateFeed", logger)))...,
+			append(options, grpctransport.ServerBefore(opentracing.GRPCToContext(tracer, "CreateFeed", logger)))...,
 		),
 	}
 }
@@ -102,7 +101,7 @@ type grpcServer struct {
 	createfeed grpctransport.Handler
 }
 
-func (s *grpcServer) GetFeeds(ctx context.Context, req *feed.GetFeedsRequest) (*feed.GetFeedsResponse, error) {
+func (s *grpcServer) GetFeeds(ctx oldcontext.Context, req *feed.GetFeedsRequest) (*feed.GetFeedsResponse, error) {
 	_, rep, err := s.getfeeds.ServeGRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -110,7 +109,7 @@ func (s *grpcServer) GetFeeds(ctx context.Context, req *feed.GetFeedsRequest) (*
 	return rep.(*feed.GetFeedsResponse), nil
 }
 
-func (s *grpcServer) CreateFeed(ctx context.Context, req *feed.FeedRecord) (*feed.OkResponse, error) {
+func (s *grpcServer) CreateFeed(ctx oldcontext.Context, req *feed.FeedRecord) (*feed.OkResponse, error) {
 	_, rep, err := s.createfeed.ServeGRPC(ctx, req)
 	if err != nil {
 		return nil, err

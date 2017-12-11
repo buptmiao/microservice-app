@@ -1,6 +1,7 @@
 package topic
 
 import (
+	"context"
 	"fmt"
 	"github.com/buptmiao/microservice-app/proto/topic"
 	"github.com/go-kit/kit/endpoint"
@@ -11,7 +12,7 @@ import (
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
+	oldcontext "golang.org/x/net/context"
 	"time"
 )
 
@@ -53,7 +54,7 @@ func MakeGetTopicEndpoint(s topic.TopicServer, tracer stdopentracing.Tracer, log
 		return s.GetTopic(ctx, req)
 	}
 	epduration := duration.With("method", "GetTopic")
-	eplog := log.NewContext(logger).With("method", "GetTopic")
+	eplog := log.With(logger, "method", "GetTopic")
 	ep = opentracing.TraceServer(tracer, "GetTopic")(ep)
 	ep = EndpointInstrumentingMiddleware(epduration)(ep)
 	ep = EndpointLoggingMiddleware(eplog)(ep)
@@ -68,11 +69,10 @@ func MakeGRPCServer(ctx context.Context, s topic.TopicServer, tracer stdopentrac
 
 	return &grpcServer{
 		gettopic: grpctransport.NewServer(
-			ctx,
 			MakeGetTopicEndpoint(s, tracer, logger),
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
-			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetTopic", logger)))...,
+			append(options, grpctransport.ServerBefore(opentracing.GRPCToContext(tracer, "GetTopic", logger)))...,
 		),
 	}
 }
@@ -81,7 +81,7 @@ type grpcServer struct {
 	gettopic grpctransport.Handler
 }
 
-func (s *grpcServer) GetTopic(ctx context.Context, req *topic.GetTopicRequest) (*topic.GetTopicResponse, error) {
+func (s *grpcServer) GetTopic(ctx oldcontext.Context, req *topic.GetTopicRequest) (*topic.GetTopicResponse, error) {
 	_, rep, err := s.gettopic.ServeGRPC(ctx, req)
 	if err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	p_topic "github.com/buptmiao/microservice-app/proto/topic"
@@ -10,7 +11,6 @@ import (
 	stdopentracing "github.com/opentracing/opentracing-go"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net"
 	"net/http"
@@ -36,9 +36,9 @@ func main() {
 	//logger
 	var logger log.Logger
 	logger = log.NewLogfmtLogger(os.Stdout)
-	logger = log.NewContext(logger).With("ts", log.DefaultTimestampUTC)
-	logger = log.NewContext(logger).With("caller", log.DefaultCaller)
-	logger = log.NewContext(logger).With("service", "topic")
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
+	logger = log.With(logger, "caller", log.DefaultCaller)
+	logger = log.With(logger, "service", "topic")
 
 	// Service registrar domain. In this example we use etcd.
 	var sdClient etcd.Client
@@ -65,7 +65,7 @@ func main() {
 
 	tracer := stdopentracing.GlobalTracer() // nop by default
 	if *zipkinAddr != "" {
-		logger := log.NewContext(logger).With("tracer", "Zipkin")
+		logger := log.With(logger, "tracer", "Zipkin")
 		logger.Log("addr", *zipkinAddr)
 		collector, err := zipkin.NewHTTPCollector(
 			*zipkinAddr,
@@ -112,7 +112,7 @@ func main() {
 
 	// Debug listener.
 	go func() {
-		logger := log.NewContext(logger).With("transport", "debug")
+		logger := log.With(logger, "transport", "debug")
 
 		m := http.NewServeMux()
 		m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))

@@ -15,14 +15,15 @@ import (
 	"github.com/go-kit/kit/sd/lb"
 	"github.com/go-kit/kit/tracing/opentracing"
 	grpctransport "github.com/go-kit/kit/transport/grpc"
-	jujuratelimit "github.com/juju/ratelimit"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	"github.com/sony/gobreaker"
 	"golang.org/x/net/context"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 )
 
 var feedCli feed.FeedClient
+var feedInstancer *etcd.Instancer
 
 func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) {
 	feedCli = NewFeedClient(conn, tracer, logger)
@@ -30,6 +31,8 @@ func Init(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger
 
 func InitWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, logger log.Logger) {
 	feedCli = NewFeedClientWithSD(sdClient, tracer, logger)
+	feedInstancer, _ = etcd.NewInstancer(sdClient, "feedSD", logger)
+
 }
 
 func GetClient() feed.FeedClient {
@@ -62,7 +65,7 @@ func (f *FeedClient) CreateFeed(ctx context.Context, in *feed.FeedRecord, opts .
 
 func NewFeedClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger log.Logger) feed.FeedClient {
 
-	limiter := ratelimit.NewTokenBucketLimiter(jujuratelimit.NewBucketWithRate(100, 100))
+	limiter := ratelimit.NewDelayingLimiter(rate.NewLimiter(rate.Every(time.Second), 1000))
 
 	var getFeedsEndpoint endpoint.Endpoint
 	{
@@ -73,7 +76,7 @@ func NewFeedClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger l
 			util.DummyEncode,
 			util.DummyDecode,
 			feed.GetFeedsResponse{},
-			grpctransport.ClientBefore(opentracing.ToGRPCRequest(tracer, logger)),
+			grpctransport.ClientBefore(opentracing.ContextToGRPC(tracer, logger)),
 		).Endpoint()
 		getFeedsEndpoint = opentracing.TraceClient(tracer, "GetFeeds")(getFeedsEndpoint)
 		getFeedsEndpoint = limiter(getFeedsEndpoint)
@@ -92,7 +95,7 @@ func NewFeedClient(conn *grpc.ClientConn, tracer stdopentracing.Tracer, logger l
 			util.DummyEncode,
 			util.DummyDecode,
 			feed.OkResponse{},
-			grpctransport.ClientBefore(opentracing.ToGRPCRequest(tracer, logger)),
+			grpctransport.ClientBefore(opentracing.ContextToGRPC(tracer, logger)),
 		).Endpoint()
 		createFeedEndpoint = opentracing.TraceClient(tracer, "CreateFeed")(createFeedEndpoint)
 		createFeedEndpoint = limiter(createFeedEndpoint)
@@ -120,14 +123,14 @@ func NewFeedClientWithSD(sdClient etcd.Client, tracer stdopentracing.Tracer, log
 	res := &FeedClient{}
 
 	factory := FeedFactory(MakeGetFeedsEndpoint, tracer, logger)
-	subscriber, _ := etcd.NewSubscriber(sdClient, "/services/feed", factory, logger)
-	balancer := lb.NewRoundRobin(subscriber)
+	endpointer := sd.NewEndpointer(feedInstancer, factory, logger)
+	balancer := lb.NewRoundRobin(endpointer)
 	retry := lb.Retry(3, time.Second, balancer)
 	res.GetFeedsEndpoint = retry
 
 	factory = FeedFactory(MakeCreateFeedEndpoint, tracer, logger)
-	subscriber, _ = etcd.NewSubscriber(sdClient, "/services/feed", factory, logger)
-	balancer = lb.NewRoundRobin(subscriber)
+	endpointer = sd.NewEndpointer(feedInstancer, factory, logger)
+	balancer = lb.NewRoundRobin(endpointer)
 	retry = lb.Retry(3, time.Second, balancer)
 	res.CreateFeedEndpoint = retry
 

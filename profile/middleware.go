@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"context"
 	"fmt"
 	"github.com/buptmiao/microservice-app/proto/profile"
 	"github.com/go-kit/kit/endpoint"
@@ -11,7 +12,7 @@ import (
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 	stdopentracing "github.com/opentracing/opentracing-go"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
+	oldcontext "golang.org/x/net/context"
 	"time"
 )
 
@@ -53,7 +54,7 @@ func MakeGetPrifileEndpoint(s profile.ProfileServer, tracer stdopentracing.Trace
 		return s.GetProfile(ctx, req)
 	}
 	epduration := duration.With("method", "GetProfile")
-	eplog := log.NewContext(logger).With("method", "GetProfile")
+	eplog := log.With(logger, "method", "GetProfile")
 	ep = opentracing.TraceServer(tracer, "GetProfile")(ep)
 	ep = EndpointInstrumentingMiddleware(epduration)(ep)
 	ep = EndpointLoggingMiddleware(eplog)(ep)
@@ -68,11 +69,10 @@ func MakeGRPCServer(ctx context.Context, s profile.ProfileServer, tracer stdopen
 
 	return &grpcServer{
 		getprofile: grpctransport.NewServer(
-			ctx,
 			MakeGetPrifileEndpoint(s, tracer, logger),
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
 			func(_ context.Context, request interface{}) (interface{}, error) { return request, nil },
-			append(options, grpctransport.ServerBefore(opentracing.FromGRPCRequest(tracer, "GetProfile", logger)))...,
+			append(options, grpctransport.ServerBefore(opentracing.GRPCToContext(tracer, "GetProfile", logger)))...,
 		),
 	}
 }
@@ -81,7 +81,7 @@ type grpcServer struct {
 	getprofile grpctransport.Handler
 }
 
-func (s *grpcServer) GetProfile(ctx context.Context, req *profile.GetProfileRequest) (*profile.GetProfileResponse, error) {
+func (s *grpcServer) GetProfile(ctx oldcontext.Context, req *profile.GetProfileRequest) (*profile.GetProfileResponse, error) {
 	_, rep, err := s.getprofile.ServeGRPC(ctx, req)
 	if err != nil {
 		return nil, err
